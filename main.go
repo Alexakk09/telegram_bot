@@ -8,6 +8,7 @@ import (
 	"mybot/handlers"
 	"github.com/go-telegram/bot"
 	"github.com/joho/godotenv"
+	"mybot/database"
 )
 
 func main() {
@@ -22,8 +23,8 @@ func main() {
 		log.Fatal("BOT_TOKEN is empty")
 	}
 
+	database.InitDatabase()
 	
-
 	// Create bot
 	b, err := bot.New(token, bot.WithDefaultHandler(handlers.MessageHandler),)
 	if err != nil {

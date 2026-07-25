@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"context"
-
+	"fmt"
 	"log"
+	forecast "mybot/Forecast"
+	"mybot/database"
+	"mybot/geocoding"
+	"mybot/timeapi"
 	"mybot/weather"
+
 	"strings"
 
 	"github.com/go-telegram/bot"
@@ -119,15 +124,70 @@ func MessageHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	// =========================
 	if text == "/weather" {
 
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: update.Message.Chat.ID,
-			Text:   "❌ Please provide a city.\n\nExample:\n/weather Delhi",
-		})
+		city, exists := database.GetUserCity(update.Message.Chat.ID)
 
-		if err != nil {
-			log.Println(err)
+		if !exists {
+
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ No default city set.\nUse:\n/setcity Delhi",
+			})
+
+			if err != nil {
+				log.Println(err)
+			}
+
+			return
 		}
 
+		weatherData, err := weather.GetCurrent(city)
+		if err != nil {
+
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Failed to fetch weather.",
+			})
+
+			return
+		}
+
+		sendWeather(ctx, b, update.Message.Chat.ID, weatherData)
+		return
+	}
+	// =========================
+	// /time (no city)
+	// =========================
+	if text == "/time" {
+
+		city, exists := database.GetUserCity(update.Message.Chat.ID)
+
+		if !exists {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ No default city set.\nUse:\n/setcity Delhi",
+			})
+			return
+		}
+
+		cityInfo, err := geocoding.GetCity(city)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ City not found.",
+			})
+			return
+		}
+
+		timeData, err := timeapi.GetCurrentTime(cityInfo.Timezone)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Failed to fetch time.",
+			})
+			return
+		}
+
+		sendTime(ctx, b, update.Message.Chat.ID, timeData)
 		return
 	}
 	// =========================
@@ -154,6 +214,182 @@ func MessageHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 			return
 		}
 		sendWeather(ctx, b, update.Message.Chat.ID, weatherData)
+		return
+	}
+
+	// =========================
+	// /forecast (no city)
+	// =========================
+	if text == "/forecast" {
+
+		city, exists := database.GetUserCity(update.Message.Chat.ID)
+
+		if !exists {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ No default city set.\nUse:\n/setcity Delhi",
+			})
+			return
+		}
+
+		forecastData, err := forecast.GetForecast(city)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Failed to fetch forecast.",
+			})
+			return
+		}
+
+		msg := fmt.Sprintf("📍 %s, %s\n\n🌤 Forecast\n\n",
+			forecastData.City.Name,
+			forecastData.City.Country,
+		)
+
+		for i, item := range forecastData.List {
+
+			if i == 5 {
+				break
+			}
+
+			msg += fmt.Sprintf(
+				"🕒 %s\n🌡 %.1f°C\n☁ %s\n\n",
+				item.DateTime,
+				item.Main.Temp,
+				item.Weather[0].Description,
+			)
+		}
+
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   msg,
+		})
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		return
+	}
+
+	// =========================
+	// /forecast <city>
+	// =========================
+	if strings.HasPrefix(text, "/forecast ") {
+
+		city := strings.TrimSpace(strings.TrimPrefix(text, "/forecast "))
+
+		forecastData, err := forecast.GetForecast(city)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Failed to fetch forecast.",
+			})
+			return
+		}
+
+		msg := fmt.Sprintf("📍 %s, %s\n\n🌤 Forecast\n\n",
+			forecastData.City.Name,
+			forecastData.City.Country,
+		)
+
+		for i, item := range forecastData.List {
+
+			if i == 5 {
+				break
+			}
+
+			msg += fmt.Sprintf(
+				"🕒 %s\n🌡 %.1f°C\n☁ %s\n\n",
+				item.DateTime,
+				item.Main.Temp,
+				item.Weather[0].Description,
+			)
+		}
+
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   msg,
+		})
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		return
+	}
+
+	// =========================
+	// /setcity
+	// =========================
+	if strings.HasPrefix(text, "/setcity ") {
+
+		city := strings.TrimSpace(strings.TrimPrefix(text, "/setcity "))
+
+		if city == "" {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Please provide a city.",
+			})
+			return
+		}
+
+		database.SaveUserCity(update.Message.Chat.ID, city)
+
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   fmt.Sprintf("✅ Default city set to %s.", city),
+		})
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		return
+	}
+
+	// =========================
+	// /time <city>
+	// =========================
+	if strings.HasPrefix(text, "/time ") {
+
+		city := strings.TrimSpace(strings.TrimPrefix(text, "/time "))
+
+		cityInfo, err := geocoding.GetCity(city)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ City not found.",
+			})
+			return
+		}
+
+		timeData, err := timeapi.GetCurrentTime(cityInfo.Timezone)
+		if err != nil {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "❌ Failed to fetch time.",
+			})
+			return
+		}
+
+		msg := fmt.Sprintf(
+			"🕒 %s, %s\n\n🌍 Timezone: %s\n\n⏰ %s",
+			cityInfo.Name,
+			cityInfo.Country,
+			cityInfo.Timezone,
+			timeData.Datetime,
+		)
+
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   msg,
+		})
+
+		if err != nil {
+			log.Println(err)
+		}
+
 		return
 	}
 
