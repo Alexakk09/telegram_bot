@@ -1,0 +1,15 @@
+services:
+  weather-bot:
+    build: .
+    container_name: weather-bot
+
+    env_file:
+      - .env
+
+    volumes:
+      - weather-data:/app
+
+    restart: unless-stopped
+
+volumes:
+  weather-data:

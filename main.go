@@ -5,18 +5,18 @@ import (
 	"log"
 	"os"
 
+	"mybot/database"
 	"mybot/handlers"
+
 	"github.com/go-telegram/bot"
 	"github.com/joho/godotenv"
-	"mybot/database"
 )
 
 func main() {
-	// Load environment variables
+	// Load environment variables (for local development)
 	if err := godotenv.Load(".env"); err != nil {
-	log.Fatalf("godotenv.Load failed: %v", err)
-}
-
+		log.Println("No .env file found, using Railway environment variables")
+	}
 	// Read bot token
 	token := os.Getenv("BOT_TOKEN")
 	if token == "" {
@@ -24,9 +24,9 @@ func main() {
 	}
 
 	database.InitDatabase()
-	
+
 	// Create bot
-	b, err := bot.New(token, bot.WithDefaultHandler(handlers.MessageHandler),)
+	b, err := bot.New(token, bot.WithDefaultHandler(handlers.MessageHandler))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,4 +36,3 @@ func main() {
 	// Start listening for updates
 	b.Start(context.Background())
 }
-
