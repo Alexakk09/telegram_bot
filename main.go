@@ -19,6 +19,8 @@ func main() {
 	}
 	// Read bot token
 	token := os.Getenv("BOT_TOKEN")
+	log.Printf("BOT_TOKEN length: %d", len(token))
+
 	if token == "" {
 		log.Fatal("BOT_TOKEN is empty")
 	}
