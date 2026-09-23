@@ -1,4 +1,5 @@
 # Telegram Weather & Time Bot
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A Go-based Telegram bot providing weather forecasts, time information, geocoding, and location-based services.
 
