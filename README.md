@@ -2,6 +2,11 @@
 
 A Go-based Telegram bot providing weather forecasts, time information, geocoding, and location-based services.
 
+## Demo
+
+![Telegram Bot Demo](screenshots/image1.png)
+![Telegram Bot Demo](screenshots/image2.png)
+
 ## Features
 
 - Weather forecasts
